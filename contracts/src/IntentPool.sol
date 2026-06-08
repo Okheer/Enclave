@@ -43,6 +43,7 @@ contract IntentPool {
         address     user;
         address     token_in;
         uint256     amount_in;
+        uint256     min_amount_out; 
         uint256      deadline;
         IntentState state;
     }
