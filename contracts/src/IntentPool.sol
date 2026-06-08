@@ -14,6 +14,7 @@ contract IntentPool {
    using SafeERC20 for IERC20;
 
   bytes32 private DOMAIN_SEPARATOR;
+  address private immutable settlement;
 
   //typehashes 
   bytes32 private constant INTENT_TYPEHASH = keccak256("Intent(address user,address tokenIn,address tokenOut,uint256 amountIn,uint256 amountOutMin,uint256 deadline,uint256 nonce)"); 
@@ -37,13 +38,48 @@ contract IntentPool {
     address verifyingContract;
   }
 
+  /// @dev Internal escrow record stored per intent_hash.
+    struct EscrowRecord {
+        address     user;
+        address     token_in;
+        uint256     amount_in;
+        uint256      deadline;
+        IntentState state;
+    }
+
+  enum IntentState{
+    NONEXISTING,
+    PENDING,
+    FILLED,
+    EXPIRED,
+    CANCELLED
+  }
+
+  mapping(bytes32 => EscrowRecord) public escrows;
+  mapping(address => mapping(uint64 => bool)) public usedNonces;
+  
+  event IntentSubmitted(
+        bytes32 indexed intent_hash,
+        address indexed user,
+        address token_in,
+        address token_out,
+        uint256 amount_in,
+        uint256 min_amount_out,
+        uint256  deadline
+    );
+  event IntentFilled(bytes32 indexed intent_hash, address indexed winner_solver);
+
   error BadSignature();
   error DeadlineExpired(uint256 deadline, uint256 now_);
   error SameToken(address token);
   error ZeroAmount();
+  error Unauthorized(address caller);
+  error IntentNotPending(bytes32 intent_hash, IntentState state);
+  error DeadlineNotReached(bytes32 intent_hash, uint256 deadline);
 
   constructor(address _settlement){
     DOMAIN_SEPARATOR = _hashDomain(EIP721Domain("IntentPool","1",block.chainid,address(this)));
+    settlement = _settlement;
   }
 
   /// @notice Submit a signed intent and escrow token_in.
@@ -81,22 +117,58 @@ contract IntentPool {
 
       //SafeToken transfer from 
       IERC20(_intent.tokenIn).safeTransferFrom(_intent.user, address(this), _intent.amountIn);
-
+      emit IntentSubmitted(intentHash, _intent.user, _intent.tokenIn, _intent.tokenOut, _intent.amountIn, _intent.amountOutMin, _intent.deadline);
 
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Settlement Interface (called by SolvexSettlement only)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// @notice Mark an intent as filled and release escrowed tokens to settlement.
+  /// @dev    Only callable by the SolvexSettlement contract (checked via
+  ///         `msg.sender == settlement`). Settlement contract then handles
+  ///         forwarding to the solver and distributing fees.
+  ///         Reverts if intent is not in PENDING state.
+  /// @param  _intent_hash    The canonical intent ID.
+  /// @param  _winner_solver  Winning solver address (for event indexing).
+  ///          token_in        ERC-20 address of the escrowed asset.
+  ///         amount_in       Amount released to settlement.
+
   function markfilled(
-    bytes32 _intentHash,
+    bytes32 _intent_hash,
     address _winner_solver) 
     external {
     
+    require(msg.sender== settlement, Unauthorized(msg.sender));
+
+    if (escrows[_intent_hash].state == IntentState.PENDING){
+
+     escrows[_intent_hash].state = IntentState.FILLED;
+
+     IERC20(escrows[_intent_hash].token_in).safeTransfer(settlement, escrows[_intent_hash].amount_in);
+
+     emit IntentFilled(_intent_hash, _winner_solver);
+    }    
+
   }
 
-  function refundIntent(bytes32 _intentHash) external {
-    
+  /// @notice Reclaim escrowed tokens after intent deadline has passed.
+  /// @dev    Callable by anyone (MEV bots can trigger on behalf of user) but
+  ///         tokens always return to the original `intent.user`.
+  ///         This prevents permanent fund lock if TEE/solver goes offline.
+  /// @param  _intent_hash  The intent to refund.
+
+  function refundIntent(bytes32 _intent_hash) external {
+    require(block.timestamp > escrows[_intent_hash].deadline, DeadlineNotReached(_intent_hash,escrows[_intent_hash].deadline));
+
+    if(escrows[_intent_hash].state == IntentState.PENDING){
+      escrows[_intent_hash].state = IntentState.EXPIRED;
+
+      IERC20(escrows[_intent_hash].token_in).safeTransfer(escrows[_intent_hash].user, escrows[_intent_hash].amount_in);
   }
 
-
+  }
   ///////////////////////////////////////////////////////////////////////////////////
   ///////////////////////     private functions   ///////////////////////////////////
   ///////////////////////////////////////////////////////////////////////////////////
