@@ -1,7 +1,7 @@
-# PRISM TEE Solver Engine - P3 Deliverables
+# PRISM TEE Solver Engine
 
 ## Overview
-This is the **Person 3 (P3)** implementation of the PRISM Protocol - the **TEE (Trusted Execution Environment) Solver Engine**. This component runs sealed solver competitions inside GCP Confidential Space and generates cryptographically signed attestations that prove the correct solver was selected fairly.
+This is the implementation of the PRISM Protocol - the **TEE (Trusted Execution Environment) Solver Engine**. This component runs sealed solver competitions inside GCP Confidential Space and generates cryptographically signed attestations that prove the correct solver was selected fairly.
 
 ## Architecture
 
@@ -73,23 +73,6 @@ Bridges TEE → Stylus contract (P2):
 - Builds calldata for SolvexVerifier.verify() call
 - Tracks confirmation status
 
-## Phase Deliverables
-
-### **Days 1-2: Core TEE Engine + Demo Setup**
-- [x] **Sealed competition logic** - No quote visibility between solvers
-- [x] **ECDSA key generation** - TEE's signing keypair 
-- [x] **Attestation creation & signing** - Proof of fair winner selection
-- [x] **Quote intake API** - HTTP endpoints for solver submissions
-- [x] **Merkle chain tracking** - Attestation continuity verification
-- [x] **Demo simulation mode** - Colluding solver pair to showcase MEV elimination
-- [x] **Gas benchmark data** - Comparison with Solidity ecrecover
-
-### **Days 3-5: Integration & Deployment**
-- [x] **Integration with SolvexVerifier (P2)** - Attestation format & RPC calls
-- [x] **Arbitrum Sepolia deployment** - Docker image for GCP Confidential Space
-- [x] **End-to-end testing** - Full flow from intent → sealed competition → attestation → verification
-- [x] **Live attestation explorer UI** - Merkle chain visualization for judges
-- [x] **Gas benchmarking script** - Live comparison on Sepolia
 
 ## Key Technical Decisions
 
@@ -200,7 +183,7 @@ Response:
 curl http://localhost:8080/pubkey
 ```
 
-Used by P1 (Solidity) to register TEE onchain:
+Used by Solidity to register TEE onchain:
 ```solidity
 SolverRegistry.registerTEE(tee_pubkey)
 ```
@@ -227,19 +210,19 @@ Response:
 }
 ```
 
-## Integration with P2 (SolvexVerifier)
+## Integration with SolvexVerifier
 
-After competition finalizes, attestation flows to P2:
+After competition finalizes, attestation flows to solvexVerifier:
 
 ```
-P3: TEE Generator
+: TEE Generator
   ↓ attestation + signature
-P2: SolvexVerifier (Stylus/Rust)
+: SolvexVerifier (Stylus/Rust)
   ✓ Verify ECDSA signature
   ✓ Check Merkle continuity
   ✓ Check nonce guard (replay protection)
   ↓ returns true
-P1: Settlement (Solidity)
+: Settlement (Solidity)
   ↓ Release escrowed funds
 User + Solver
 ```
@@ -343,16 +326,16 @@ RUST_LOG=debug cargo run --release
 
 ## Interoperability
 
-### With P1 (Solidity Settlement)
-- P1 calls `SolvexVerifier.verify()` before releasing funds
-- P1 reads `winner_solver` from attestation
-- P1 handles fund distribution and fee claims
+### Solidity Settlement
+- calls `SolvexVerifier.verify()` before releasing funds
+- reads `winner_solver` from attestation
+- handles fund distribution and fee claims
 
-### With P2 (Stylus Verifier)
-- P2 receives serialized attestation & signature
-- P2 performs ECDSA verification
-- P2 checks Merkle continuity
-- P2 returns boolean to P1 settlement
+### With Stylus Verifier
+- receives serialized attestation & signature
+- performs ECDSA verification
+- checks Merkle continuity
+- returns boolean to P1 settlement
 
 ### Contract Interfaces
 See `verifier_interface.rs` for exact encoding.
@@ -374,10 +357,10 @@ See `verifier_interface.rs` for exact encoding.
 For questions about:
 - **Quote submission API** → See `/quote` endpoint docs
 - **Attestation format** → See `attestation.rs`
-- **Integration with P2** → See `verifier_interface.rs`
+- **Integration with SolvexVerifier** → See `verifier_interface.rs`
 - **Merkle verification** → See `merkle.rs`
 
 ## License
 
-PRISM Protocol - TEE Solver Engine (P3)
+PRISM Protocol - TEE Solver Engine 
 Part of the Enclave intents protocol stack.
