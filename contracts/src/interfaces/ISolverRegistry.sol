@@ -2,9 +2,6 @@
 pragma solidity ^0.8.33;
 
 interface ISolverRegistry {
-    // ─────────────────────────────────────────────────────────────────────────
-    // Structs
-    // ─────────────────────────────────────────────────────────────────────────
 
     struct SolverRecord {
         bytes   teePubkey;   
@@ -14,10 +11,6 @@ interface ISolverRegistry {
         bool    slashed;     
         bool    active;             
     }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Events & Errors
-    // ─────────────────────────────────────────────────────────────────────────
 
     event SolverRegistered(address indexed solver, bytes teePubkey, uint256 stake);
     event SolverKeyRotated(address indexed solver, bytes newPubkey);
@@ -35,9 +28,6 @@ interface ISolverRegistry {
     error SlashExceedsStake(uint256 amount, uint256 stake);
     error Suspended(address solver);
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // State Variables / Constants Getters
-    // ─────────────────────────────────────────────────────────────────────────
 
     function SETTLER_ROLE() external view returns (bytes32);
     function MIN_STAKE() external view returns (uint256);
@@ -49,9 +39,6 @@ interface ISolverRegistry {
     function feeRecipient() external view returns (address);
     function solverList(uint256 index) external view returns (address);
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Mutative Core Functions
-    // ─────────────────────────────────────────────────────────────────────────
 
     function registerSolver(
         address _solver,
@@ -72,10 +59,6 @@ interface ISolverRegistry {
     ) external;
 
     function updateReputation(address _solver, uint256 _accuracy) external;
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // View Functions
-    // ─────────────────────────────────────────────────────────────────────────
 
     function isValidSolver(address _solver) external view returns (bool);
     function getTeePublicKey(address _solver) external view returns (bytes memory);

@@ -2,10 +2,7 @@
 pragma solidity ^0.8.33;
 
 interface IIntentPool {
-    // ─────────────────────────────────────────────────────────────────────────
-    // Enums & Structs
-    // ─────────────────────────────────────────────────────────────────────────
-    
+
     enum IntentState { NONEXISTING, PENDING, FILLED, EXPIRED, CANCELLED }
 
     struct Intent {
@@ -26,10 +23,6 @@ interface IIntentPool {
         uint256     deadline;
         IntentState state;
     }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Events & Errors
-    // ─────────────────────────────────────────────────────────────────────────
 
     event IntentSubmitted(
         bytes32 indexed intent_hash,
@@ -66,10 +59,6 @@ interface IIntentPool {
     ) external returns (address token_in, uint256 amount_in);
 
     function refundIntent(bytes32 _intent_hash) external;
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // View Getters
-    // ─────────────────────────────────────────────────────────────────────────
 
     function getEscrowRecord(bytes32 _intent_hash) external view returns (EscrowRecord memory);
     
