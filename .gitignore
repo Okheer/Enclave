@@ -3,3 +3,4 @@ contracts/lib
 target/
 target/
 *.log
+UPDATES.md
