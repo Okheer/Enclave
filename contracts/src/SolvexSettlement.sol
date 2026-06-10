@@ -196,8 +196,10 @@ contract SolvexSettlement is ReentrancyGuard {
         // ──    Merkle chain pre-check (Solidity layer) ────────────────────────
         //       SolvexVerifier also enforces this; duplicating here ensures the
         //       Solidity state machine can never advance without a valid chain.
-        if (_attestation.prev_attest_hash != lastAttestationHash)
-            revert MerkleChainBroken(lastAttestationHash, _attestation.prev_attest_hash);
+        bytes32 chainHead = solvexVerifier.get_last_attest_hash();
+if (_attestation.prev_attest_hash != chainHead)
+    revert MerkleChainBroken(chainHead, _attestation.prev_attest_hash);
+
 
         // ──    SolvexVerifier call (Arbitrum Stylus / Rust, ~310 gas) ─────────
         //       Performs three checks atomically inside the Rust WASM:
@@ -206,9 +208,16 @@ contract SolvexSettlement is ReentrancyGuard {
         //         c) attestation.prev_attest_hash continuity (Merkle chain)
         //
         //       Attestation must be ABI-encoded for the Stylus verifier contract.
-        bytes memory encodedAttestation = abi.encode(_attestation);
-        bool ok = solvexVerifier.verify(_intent_hash, encodedAttestation, _tee_sig);
-        if (!ok) revert AttestationVerificationFailed(_intent_hash);
+           bytes memory teePubkey = solverRegistry.getTeePublicKey(_attestation.winner_solver);
+          address expectedSigner = _pubkeyToAddress(teePubkey);
+
+          bool ok = solvexVerifier.verify_with_expected_signer(
+                                                               _intent_hash,
+                                                                abi.encode(_attestation),
+                                                               _tee_sig,
+                                                         expectedSigner
+);
+if (!ok) revert AttestationVerificationFailed(_intent_hash);
 
         // ──    Min-output check against IntentPool escrow record ──────────────
         //       Fetches the EscrowRecord (which must include min_amount_out —
@@ -356,5 +365,16 @@ contract SolvexSettlement is ReentrancyGuard {
     function computeFee(uint256 _amount) external pure returns (uint256 fee, uint256 solverAmount) {
         fee          = (_amount * PROTOCOL_FEE_BPS) / BPS_DENOM;
         solverAmount = _amount - fee;
+    }
+    function _pubkeyToAddress(bytes memory pubkey) internal pure returns (address) {
+        require(pubkey.length == 65, "SolvexSettlement: bad pubkey length");
+        // Extract the last 64 bytes (skip the first byte which is the format prefix)
+        // and hash them to derive the address
+        bytes memory pubkeyXY = new bytes(64);
+        for (uint256 i = 0; i < 64; i++) {
+            pubkeyXY[i] = pubkey[i + 1];
+        }
+        bytes32 h = keccak256(pubkeyXY);
+        return address(uint160(uint256(h)));
     }
 }
