@@ -197,7 +197,7 @@ contract SolverRegistry is AccessControl, ReentrancyGuard {
     }
 
     /// @notice Update solver reputation via exponential moving average.
-    /// @dev    R_new = α * accuracy + (1 − α) * R_prev
+    /// @dev    R_new = (α * accuracy + (100 - α) * R_prev) / 100
     ///         where accuracy = actual_output / quoted_output (scaled 0–1000).
     ///         Called by SolvexSettlement after each successful fill.
     ///         α = ALPHA_NUM / ALPHA_DEN = 0.05.
@@ -207,18 +207,19 @@ contract SolverRegistry is AccessControl, ReentrancyGuard {
         address _solver,
         uint256 _accuracy
     ) external onlyRole(SETTLER_ROLE) {
-        // Phase 1: no-op stub — stores accuracy as raw rep
-        uint256 oldRep = solvers[_solver].reputation;
-        solvers[_solver].reputation = _accuracy;
-        
-        emit ReputationUpdated(_solver, oldRep, _accuracy);
+        if (!solvers[_solver].active) revert SolverNotActive(_solver);
 
-        // Phase 2 implementation hook template:
-        // uint256 oldRep = solvers[_solver].reputation;
-        // uint256 newRep = (ALPHA_NUM * _accuracy + (ALPHA_DEN - ALPHA_NUM) * oldRep) / ALPHA_DEN;
-        // solvers[_solver].reputation = newRep;
-        // if (newRep < REP_SUSPEND_THRESHOLD) emit SolverSuspended(_solver);
-        // emit ReputationUpdated(_solver, oldRep, newRep);
+        uint256 oldRep = solvers[_solver].reputation;
+        uint256 newRep = (ALPHA_NUM * _accuracy + (ALPHA_DEN - ALPHA_NUM) * oldRep) / ALPHA_DEN;
+        
+        solvers[_solver].reputation = newRep;
+        
+        emit ReputationUpdated(_solver, oldRep, newRep);
+
+        if (newRep < REP_SUSPEND_THRESHOLD) {
+            solvers[_solver].active = false;
+            emit SolverSuspended(_solver);
+        }
     }
 
 

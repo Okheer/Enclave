@@ -1,0 +1,46 @@
+[package]
+name = "tee-solver"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["trace", "cors"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+sha2 = "0.10"
+ecdsa = { version = "0.16", features = ["signing", "verifying", "hazmat"] }
+elliptic-curve = "0.13"
+k256 = { version = "0.13", features = ["std", "ecdsa"] }
+sha3 = "0.10"
+rand = "0.8"
+hex = "0.4"
+alloy-primitives = "0.7"
+alloy-dyn-abi = "0.7"
+alloy-sol-types = "0.7"
+anyhow = "1.0"
+thiserror = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+parking_lot = "0.12"
+dashmap = "5.5"
+blake3 = "1.5"
+reqwest = { version = "0.12", features = [
+    "json",
+    "rustls-tls",
+], default-features = false }
+openssl = { version = "0.10", features = ["vendored"] }
+alloy-transport-http = "0.7"
+alloy-json-rpc = "0.7"
+alloy-rpc-types = "0.7"
+
+[dev-dependencies]
+mockall = "0.12"
+criterion = "0.5"
+
+[[bench]]
+name = "benchmark"
+harness = false

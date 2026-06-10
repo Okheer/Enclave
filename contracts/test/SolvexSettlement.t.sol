@@ -209,7 +209,7 @@ contract MockSolverRegistry is ISolverRegistry {
 /// @notice Mock IntentPool
 contract MockIntentPool is IIntentPool {
     mapping(bytes32 => EscrowRecord) public escrows_;
-    mapping(address => mapping(uint64 => bool)) public usedNonces_;
+    mapping(address => mapping(uint256 => bool)) public usedNonces_;
     uint256 public tokenBalance;
 
     function submitIntent(Intent calldata _intent, bytes calldata _signature)
@@ -221,8 +221,8 @@ contract MockIntentPool is IIntentPool {
         bytes32 hash = keccak256(abi.encode(_intent));
 
         // Verify nonce not used
-        require(!usedNonces_[_intent.user][uint64(_intent.nonce)], "Nonce already used");
-        usedNonces_[_intent.user][uint64(_intent.nonce)] = true;
+        require(!usedNonces_[_intent.user][_intent.nonce], "Nonce already used");
+        usedNonces_[_intent.user][_intent.nonce] = true;
 
         // Store escrow
         escrows_[hash] = EscrowRecord({
@@ -289,7 +289,7 @@ contract MockIntentPool is IIntentPool {
         return (rec.user, rec.token_in, rec.amount_in, rec.min_amount_out, rec.deadline, rec.state);
     }
 
-    function usedNonces(address _user, uint64 _nonce) external view override returns (bool) {
+    function usedNonces(address _user, uint256 _nonce) external view override returns (bool) {
         return usedNonces_[_user][_nonce];
     }
 }

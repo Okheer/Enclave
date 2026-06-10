@@ -71,5 +71,5 @@ interface IIntentPool {
         IntentState state
     );
     
-    function usedNonces(address _user, uint64 _nonce) external view returns (bool);
+    function usedNonces(address _user, uint256 _nonce) external view returns (bool);
 }

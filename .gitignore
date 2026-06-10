@@ -1,2 +1,5 @@
 contracts/stylus/solver-verifier/target/
 contracts/lib
+target/
+target/
+*.log

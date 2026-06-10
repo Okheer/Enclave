@@ -57,7 +57,7 @@ contract IntentPool {
   }
 
   mapping(bytes32 => EscrowRecord) public escrows;
-  mapping(address => mapping(uint64 => bool)) public usedNonces;
+  mapping(address => mapping(uint256 => bool)) public usedNonces;
   
   event IntentSubmitted(
         bytes32 indexed intent_hash,
@@ -77,6 +77,8 @@ contract IntentPool {
   error Unauthorized(address caller);
   error IntentNotPending(bytes32 intent_hash, IntentState state);
   error DeadlineNotReached(bytes32 intent_hash, uint256 deadline);
+  error NonceUsed(address user, uint256 nonce);
+  error AlreadySubmitted(bytes32 intent_hash);
 
   constructor(address _settlement){
     DOMAIN_SEPARATOR = _hashDomain(EIP721Domain("IntentPool","1",block.chainid,address(this)));
@@ -94,32 +96,55 @@ contract IntentPool {
   ///           7. Emit IntentSubmitted
   /// @param  _intent     The Intent struct exactly as signed by the user.
   /// @param  _signature  EIP-712 signature over the intent struct hash.
-  ///  returns intent_hash keccak256 of the encoded intent (used as canonical ID).
+  /// @return intentHash keccak256 of the encoded intent (used as canonical ID).
 
   function submitIntent(
     Intent calldata _intent ,
     bytes calldata _signature
   ) external returns (bytes32 intentHash){
 
-    require(block.timestamp <= _intent.deadline,DeadlineExpired(_intent.deadline,block.timestamp));
-    require(_intent.tokenIn != _intent.tokenOut,SameToken(_intent.tokenIn));
-    require(_intent.amountIn >= 0,ZeroAmount());
+    if (block.timestamp > _intent.deadline) revert DeadlineExpired(_intent.deadline, block.timestamp);
+    if (_intent.tokenIn == _intent.tokenOut) revert SameToken(_intent.tokenIn);
+    if (_intent.amountIn == 0) revert ZeroAmount();
+    if (usedNonces[_intent.user][_intent.nonce]) revert NonceUsed(_intent.user, _intent.nonce);
     
-     intentHash= keccak256(abi.encodePacked(
+     intentHash = keccak256(abi.encodePacked(
             "\x19\x01",
             DOMAIN_SEPARATOR,
             _hashmessage(_intent)
         ));
 
-      //Signer reocvery
+      if (escrows[intentHash].state != IntentState.NONEXISTING) revert AlreadySubmitted(intentHash);
+
+      // Signer recovery
       address signer = ECDSA.recover(intentHash, _signature);
+      if (signer != _intent.user) revert BadSignature();
 
-      require(signer == _intent.user,BadSignature());
+      // Mark nonce used
+      usedNonces[_intent.user][_intent.nonce] = true;
 
-      //SafeToken transfer from 
+      // Store EscrowRecord
+      escrows[intentHash] = EscrowRecord({
+          user: _intent.user,
+          token_in: _intent.tokenIn,
+          amount_in: _intent.amountIn,
+          min_amount_out: _intent.amountOutMin,
+          deadline: _intent.deadline,
+          state: IntentState.PENDING
+      });
+
+      // SafeToken transfer from user to this contract
       IERC20(_intent.tokenIn).safeTransferFrom(_intent.user, address(this), _intent.amountIn);
-      emit IntentSubmitted(intentHash, _intent.user, _intent.tokenIn, _intent.tokenOut, _intent.amountIn, _intent.amountOutMin, _intent.deadline);
-
+      
+      emit IntentSubmitted(
+          intentHash, 
+          _intent.user, 
+          _intent.tokenIn, 
+          _intent.tokenOut, 
+          _intent.amountIn, 
+          _intent.amountOutMin, 
+          _intent.deadline
+      );
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -127,58 +152,74 @@ contract IntentPool {
   // ─────────────────────────────────────────────────────────────────────────
 
   /// @notice Mark an intent as filled and release escrowed tokens to settlement.
-  /// @dev    Only callable by the SolvexSettlement contract (checked via
-  ///         `msg.sender == settlement`). Settlement contract then handles
-  ///         forwarding to the solver and distributing fees.
+  /// @dev    Only callable by the SolvexSettlement contract.
+  ///         Settlement contract then handles forwarding to the solver and distributing fees.
   ///         Reverts if intent is not in PENDING state.
   /// @param  _intent_hash    The canonical intent ID.
   /// @param  _winner_solver  Winning solver address (for event indexing).
-  ///          token_in        ERC-20 address of the escrowed asset.
-  ///         amount_in       Amount released to settlement.
+  /// @return token_in        ERC-20 address of the escrowed asset.
+  /// @return amount_in       Amount released to settlement.
 
-  function markfilled(
+  function markFilled(
     bytes32 _intent_hash,
-    address _winner_solver) 
-    external {
+    address _winner_solver
+  ) external returns (address token_in, uint256 amount_in) {
     
-    require(msg.sender== settlement, Unauthorized(msg.sender));
+    if (msg.sender != settlement) revert Unauthorized(msg.sender);
 
-    if (escrows[_intent_hash].state == IntentState.PENDING){
+    EscrowRecord storage rec = escrows[_intent_hash];
+    if (rec.state != IntentState.PENDING) revert IntentNotPending(_intent_hash, rec.state);
 
-     escrows[_intent_hash].state = IntentState.FILLED;
+    rec.state = IntentState.FILLED;
+    token_in = rec.token_in;
+    amount_in = rec.amount_in;
 
-     IERC20(escrows[_intent_hash].token_in).safeTransfer(settlement, escrows[_intent_hash].amount_in);
+    IERC20(token_in).safeTransfer(settlement, amount_in);
 
-     emit IntentFilled(_intent_hash, _winner_solver);
-    }    
-
+    emit IntentFilled(_intent_hash, _winner_solver);
   }
 
   /// @notice Reclaim escrowed tokens after intent deadline has passed.
-  /// @dev    Callable by anyone (MEV bots can trigger on behalf of user) but
-  ///         tokens always return to the original `intent.user`.
-  ///         This prevents permanent fund lock if TEE/solver goes offline.
+  /// @dev    Tokens always return to the original `intent.user`.
   /// @param  _intent_hash  The intent to refund.
 
   function refundIntent(bytes32 _intent_hash) external {
-    require(block.timestamp > escrows[_intent_hash].deadline, DeadlineNotReached(_intent_hash,escrows[_intent_hash].deadline));
+    EscrowRecord storage rec = escrows[_intent_hash];
+    if (rec.state != IntentState.PENDING) revert IntentNotPending(_intent_hash, rec.state);
+    if (block.timestamp <= rec.deadline) revert DeadlineNotReached(_intent_hash, rec.deadline);
 
-    if(escrows[_intent_hash].state == IntentState.PENDING){
-      escrows[_intent_hash].state = IntentState.EXPIRED;
-
-      IERC20(escrows[_intent_hash].token_in).safeTransfer(escrows[_intent_hash].user, escrows[_intent_hash].amount_in);
+    rec.state = IntentState.EXPIRED;
+    IERC20(rec.token_in).safeTransfer(rec.user, rec.amount_in);
   }
 
+  /// @notice Get the full escrow record for an intent.
+  function getEscrowRecord(bytes32 _intent_hash) external view returns (EscrowRecord memory) {
+      return escrows[_intent_hash];
   }
+
   ///////////////////////////////////////////////////////////////////////////////////
   ///////////////////////     private functions   ///////////////////////////////////
   ///////////////////////////////////////////////////////////////////////////////////
   function _hashmessage(Intent calldata _intent) private pure returns (bytes32){
-    return keccak256(abi.encode(INTENT_TYPEHASH,_intent.user,_intent.tokenIn,_intent.tokenOut,_intent.amountIn,_intent.amountOutMin,_intent.deadline,_intent.nonce));
+    return keccak256(abi.encode(
+        INTENT_TYPEHASH,
+        _intent.user,
+        _intent.tokenIn,
+        _intent.tokenOut,
+        _intent.amountIn,
+        _intent.amountOutMin,
+        _intent.deadline,
+        _intent.nonce
+    ));
   }
 
   function _hashDomain(EIP721Domain memory _domain) private pure returns (bytes32){
-    return keccak256(abi.encode(DOMAIN_TYPEHASH,keccak256(bytes(_domain.name)),keccak256(bytes(_domain.version)),_domain.chainId,_domain.verifyingContract));
+    return keccak256(abi.encode(
+        DOMAIN_TYPEHASH,
+        keccak256(bytes(_domain.name)),
+        keccak256(bytes(_domain.version)),
+        _domain.chainId,
+        _domain.verifyingContract
+    ));
   }
-
 }

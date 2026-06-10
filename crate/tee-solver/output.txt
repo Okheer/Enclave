@@ -1,0 +1,230 @@
+
+[95m[1m
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║          ██████╗ ██████╗ ██╗███████╗███╗   ███╗                             ║
+║          ██╔══██╗██╔══██╗██║██╔════╝████╗ ████║                             ║
+║          ██████╔╝██████╔╝██║███████╗██╔████╔██║                             ║
+║          ██╔═══╝ ██╔══██╗██║╚════██║██║╚██╔╝██║                             ║
+║          ██║     ██║  ██║██║███████║██║ ╚═╝ ██║                             ║
+║          ╚═╝     ╚═╝  ╚═╝╚═╝╚══════╝╚═╝     ╚═╝                             ║
+║                                                                              ║
+║     Private Routing & Intent Settlement Mechanism                            ║
+║     TEE-Sealed Solver Competition × Arbitrum Stylus Attestation              ║
+║                                                                              ║
+║     Arbitrum Open House Hackathon 2026                                       ║
+║     Team PRISM — P3: TEE Offchain Engine                                     ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+[0m
+
+[95m[1m══════════════════════════════════════════════════════════════════════════════[0m
+[95m[1m  1 — TEE System Health & Hardware Attestation[0m
+[95m[1m══════════════════════════════════════════════════════════════════════════════[0m
+
+[92m  ✓ TEE Solver Engine is operational — version 0.1.0[0m
+[2m  ──────────────────────────────────────────────────────────────────────────[0m
+[96m  ℹ TEE Public Key (secp256k1):  0x0200f77f0b2c650a375e4f5e58cee7f5354fc9fe45d70a213fc7a9c84cc55aa979[0m
+[96m  ℹ TEE Ethereum Address:         0x5ddff812689590432e437ee2137a9ddf8b958127[0m
+[2m  ──────────────────────────────────────────────────────────────────────────[0m
+[92m  ✓ GCP Confidential Space attestation token fetched[0m
+[96m  ℹ Attestation Mode:    SIMULATION[0m
+[96m  ℹ Image Digest (PCR0): 93c3ee71fe292b54c817a3fab92c65fc1a20656fbb0ffa9350d0030ca431b783[0m
+[96m  ℹ JWT Token Preview:   SIMULATION_JWT_93c3ee71fe292b54[0m
+[96m  ℹ Reference impl:      Same pattern as github.com/SyndicateProtocol/synddb/crates/gcp-attestation[0m
+[2m  ──────────────────────────────────────────────────────────────────────────[0m
+[93m  ⚠ ACTION FOR P1 → Register TEE address in SolverRegistry.sol:[0m
+[93m  ⚠   Address:      0x5ddff812689590432e437ee2137a9ddf8b958127[0m
+[93m  ⚠   Image digest: 93c3ee71fe292b54c817a3fab92c65fc1a20656fbb0ffa9350d0030ca431b783[0m
+
+[2m    In production: AMD SEV-SNP CPU measures binary into PCR0 before code executes.[0m
+[2m    GCP signs an OIDC JWT binding the image digest to the TEE public key.[0m
+[2m    P1 registers this pubkey onchain — every fill signature is then hardware-provable.[0m
+
+[95m[1m══════════════════════════════════════════════════════════════════════════════[0m
+[95m[1m  2 — MEV Attack #1: Quote Sniping Prevention[0m
+[95m[1m══════════════════════════════════════════════════════════════════════════════[0m
+
+[96m  ℹ Scenario: Solver B monitors the mempool and undercuts the best quote by 1 wei[0m
+
+[2m    In a traditional intent protocol:[0m
+[2m      A broadcasts quote of 1.000 ETH output[0m
+[2m      B sees A's quote → submits 1.001 ETH (1 wei better) at the last second[0m
+[2m      B wins with zero innovation — pure extraction[0m
+[2m      User gets marginally better price but real competition is suppressed[0m
+
+[2m    With PRISM TEE:[0m
+[2m      All quotes sealed in hardware-attested enclave memory[0m
+[2m      B has NO visibility into A's quote at any point[0m
+[2m      argmax(output_amount) runs inside the sealed enclave[0m
+[2m      Only the winner is revealed — peer quotes stay sealed forever[0m
+
+[96m  ℹ solver_A_honest            quotes  1.0000 ETH[0m
+[93m  ℹ solver_B_sniper            quotes  0.9990 ETH  ← sniper thinks this undercuts A[0m
+[96m  ℹ solver_C_best              quotes  1.0500 ETH  ← true best[0m
+
+[2m  ──────────────────────────────────────────────────────────────────────────[0m
+[92m  ✓ TEE Winner:         solver_C_best[0m
+[92m  ✓ Winning output:     1.0500 ETH  (argmax selected, no sniping possible)[0m
+[92m  ✓ Attestation hash:   0xc98c576f96f3db5e5f538041ceecaf5534b8d177…[0m
+[92m  ✓ Quote sniping ELIMINATED — sealed enclave made it structurally impossible ✅[0m
+
+[95m[1m══════════════════════════════════════════════════════════════════════════════[0m
+[95m[1m  3 — MEV Attack #2: Solver Collusion & Floor Setting Prevention[0m
+[95m[1m══════════════════════════════════════════════════════════════════════════════[0m
+
+[96m  ℹ Scenario: Solvers A & B form a cartel and agree never to quote above 0.990 ETH[0m
+
+[2m    In a traditional protocol:[0m
+[2m      Cartel members coordinate off-channel via private Telegram[0m
+[2m      Every auction is capped at cartel floor — user permanently overpays[0m
+[2m      No honest solver can break the cartel (they'd just be undercut next round)[0m
+
+[2m    With PRISM TEE:[0m
+[2m      Honest solver C submits 1.100 ETH without knowing the cartel exists[0m
+[2m      Cartel members cannot see C's quote — sealed memory prevents it[0m
+[2m      argmax picks C — cartel floor is shattered on every fill[0m
+
+[93m  ℹ cartel_member_A            quotes  0.9900 ETH  [cartel floor][0m
+[93m  ℹ cartel_member_B            quotes  0.9850 ETH  [cartel floor][0m
+[96m  ℹ honest_carol               quotes  1.1000 ETH  [true market rate][0m
+
+[2m  ──────────────────────────────────────────────────────────────────────────[0m
+[92m  ✓ TEE Winner:         honest_carol[0m
+[92m  ✓ Winning output:     1.1000 ETH  (cartel floor broken by honest solver)[0m
+[92m  ✓ Attestation hash:   0x1648f3b4b207d559e93c217e5f370021fcd2ac49…[0m
+[92m  ✓ Collusion ELIMINATED — sealed competition makes floor-setting impossible ✅[0m
+
+[95m[1m══════════════════════════════════════════════════════════════════════════════[0m
+[95m[1m  4 — MEV Attack #3: Sandwich Attack Prevention[0m
+[95m[1m══════════════════════════════════════════════════════════════════════════════[0m
+
+[96m  ℹ Scenario: Malicious validator Dave front-runs the fill transaction at the DEX[0m
+
+[2m    In a traditional protocol:[0m
+[2m      Solver broadcasts fill tx to mempool[0m
+[2m      Dave sees it → front-runs with a buy → fill executes at worse price → Dave sells[0m
+[2m      User receives less than quoted output — every single time[0m
+
+[2m    With PRISM TEE:[0m
+[2m      winner_solver AND fill_route are committed inside TEE BEFORE any onchain tx[0m
+[2m      The attestation signature covers fill_route — it cannot be changed post-signing[0m
+[2m      Stylus verifies the signature before releasing funds[0m
+[2m      No tx is broadcast until SolvexVerifier.verify() passes → nothing to sandwich[0m
+
+[93m  ℹ dave_sandwicher            quotes  0.9700 ETH  [malicious validator][0m
+[96m  ℹ eve_honest                 quotes  0.9800 ETH  [honest solver][0m
+
+[2m  ──────────────────────────────────────────────────────────────────────────[0m
+[92m  ✓ TEE Winner:         eve_honest[0m
+[92m  ✓ fill_route locked in attestation — Dave cannot substitute his own route[0m
+[92m  ✓ Attestation hash:   0xf0de0c4cda1cb90a8241b4ce5b959e0e0fa7140f…[0m
+[92m  ✓ Sandwich ELIMINATED — fill route cryptographically committed before settlement ✅[0m
+
+[95m[1m══════════════════════════════════════════════════════════════════════════════[0m
+[95m[1m  5 — Gas Cost Analysis: Stylus vs Solidity vs zkVM[0m
+[95m[1m══════════════════════════════════════════════════════════════════════════════[0m
+
+  Operation                               Solidity       Stylus     Saving
+  ─────────────────────────────────── ──────────── ──────────── ──────────
+  ECDSA verify (single fill)            ~3,000 gas      310 gas [92m     89.7%[0m
+  ECDSA batch (20 fills/block)         ~60,000 gas    6,200 gas [92m     89.7%[0m
+  ECDSA batch (50 fills/block)        ~150,000 gas   15,500 gas [92m     89.7%[0m
+  zkVM proof generation                 30–180 sec       <1 sec [92m     ~100x[0m
+  zkVM proof cost                      $0.02–$0.13      $0.000x [92m      ~50x[0m
+
+[2m    Stylus compiles Rust → WASM via Arbitrum's StylusSDK.[0m
+[2m    ecrecover in WASM costs 310 gas vs ~3,000 in EVM — same security, 10x cheaper.[0m
+[2m    At 50 fills/block: Stylus saves ~134,500 gas every single block, compounding forever.[0m
+
+[95m[1m══════════════════════════════════════════════════════════════════════════════[0m
+[95m[1m  6 — Merkle Attestation Chain: Tamper-Evident Fill History[0m
+[95m[1m══════════════════════════════════════════════════════════════════════════════[0m
+
+[96m  ℹ Every attestation links to the previous via prev_attest_hash[0m
+[96m  ℹ Deleting or reordering any fill breaks every subsequent hash in the chain[0m
+[96m  ℹ P2 SolvexVerifier checks chain continuity before releasing funds[0m
+
+[2m    Genesis block → Fill #1 → Fill #2 → Fill #3 → ... → Latest[0m
+[2m                      ↓           ↓           ↓[0m
+[2m                  prev=0x00   prev=h(F1)  prev=h(F2)[0m
+
+[92m  ✓ Fill #1  hash=0xc98c576f96f3db5e…  prev=0x0000000000000000[0m
+[92m  ✓ Fill #2  hash=0x1648f3b4b207d559…  prev=0xc98c576f96f3db5e…[0m
+[92m  ✓ Fill #3  hash=0xf0de0c4cda1cb90a…  prev=0x1648f3b4b207d559…[0m
+
+[92m  ✓ Merkle chain is continuous — no fills dropped or reordered ✅[0m
+[92m  ✓ TEE operator cannot silently delete any user's trade from history ✅[0m
+
+[95m[1m══════════════════════════════════════════════════════════════════════════════[0m
+[95m[1m  7 — End-to-End Pipeline: Alice Swaps 10 ETH → 30,700 USDC[0m
+[95m[1m══════════════════════════════════════════════════════════════════════════════[0m
+
+[96m  ℹ Full flow: IntentPool.sol → TEE Engine → SolvexVerifier → SolvexSettlement[0m
+
+[96m  Step 1 — Alice creates EIP-712 signed intent[0m
+[2m      token_in:       0xETH   amount_in:  10 ETH[0m
+[2m      token_out:      0xUSDC  min_out:    30,000 USDC[0m
+[2m      intent_hash:    0x00000000000000000000000000000000…[0m
+[2m      10 ETH escrowed in IntentPool.sol[0m
+
+[96m  Step 2 — TEE receives intent, opens sealed auction[0m
+[96m  ℹ alice_solver         quotes  30,500 USDC[0m
+[96m  ℹ bob_solver           quotes  30,700 USDC  ← best[0m
+[96m  ℹ charlie_solver       quotes  30,200 USDC[0m
+
+[96m  Step 3 — TEE runs argmax, signs attestation[0m
+[92m  ✓   Winner:           bob_solver[0m
+[92m  ✓   Output amount:    30,700,000,000 USDC (raw units)[0m
+[92m  ✓   Attestation hash: 0xf2c43fcd5e65da89794e65f4e0a7298ccd6bed97…[0m
+
+[96m  Step 4 — Stylus SolvexVerifier receives (intent_hash, attestation, tee_sig)[0m
+[2m      bytes32 intent_hash  = 0x000…BEEF[0m
+[2m      bytes   attestation  = 192-byte ABI-encoded Attestation struct[0m
+[2m      bytes   tee_sig      = 65-byte compact ECDSA (r || s || v=27)[0m
+
+[92m  ✓   Nonce guard:      intent hash not seen before ✓[0m
+[92m  ✓   ECDSA signer:     recovered key matches registered TEE pubkey ✓[0m
+[92m  ✓   Chain continuity: prev_attest_hash matches last settled fill ✓[0m
+[92m  ✓   SolvexVerifier.verify() returns TRUE — 310 gas ✓[0m
+
+[96m  Step 5 — SolvexSettlement.sol releases funds[0m
+[92m  ✓   Alice receives:   30,700 USDC  (best possible fill, proven fair)[0m
+[92m  ✓   Bob receives:     10 ETH  (execution reward)[0m
+[92m  ✓   Settlement:       single Arbitrum block — no delay, no trust required[0m
+
+[95m[1m══════════════════════════════════════════════════════════════════════════════[0m
+[95m[1m  8 — Deliverables Summary[0m
+[95m[1m══════════════════════════════════════════════════════════════════════════════[0m
+
+[92m  ✓ Sealed TEE solver competition              [2margmax(output_amount), DashMap sealed store[0m[0m
+[92m  ✓ ECDSA attestation signing                  [2mk256 secp256k1, 65-byte compact sig, v=27/28[0m[0m
+[92m  ✓ Merkle chain continuity                    [2mprev_attest_hash linking, tamper-evident[0m[0m
+[92m  ✓ GCP Confidential Space simulation          [2mOIDC JWT + PCR0 binary hash binding[0m[0m
+[92m  ✓ REST API                                   [2m5 endpoints: /start /quote /finalize /pubkey /health[0m[0m
+[92m  ✓ Unit tests                                 [2m36 passing across all modules[0m[0m
+[92m  ✓ Integration tests                          [2m10 passing — E2E MEV elimination verified[0m[0m
+[92m  ✓ Benchmark                                  [2msign=36µs  verify=59µs  batch×50=3ms[0m[0m
+[92m  ✓ Docker                                     [2mMulti-stage build for GCP Confidential Space[0m[0m
+[92m  ✓ P2 interface                               [2m192-byte ABI calldata, build_verify_calldata()[0m[0m
+
+[2m  ──────────────────────────────────────────────────────────────────────────[0m
+
+[1m  Pitch hook:[0m
+[95m[1m  "Prove your solver won fairly — without trusting anyone, including us."[0m
+
+[1m  Integration handoff for P1:[0m
+[93m  ⚠   TEE Address:   0x5ddff812689590432e437ee2137a9ddf8b958127[0m
+[93m  ⚠   Image digest:  93c3ee71fe292b54c817a3fab92c65fc1a20656fbb0ffa9350d0030ca431b783[0m
+[93m  ⚠   → Register both in SolverRegistry.sol on Arbitrum Sepolia[0m
+
+[1m  Integration handoff for P2:[0m
+[96m  ℹ   Attestation:   192-byte ABI-encoded struct[0m
+[96m  ℹ   Signature:     65-byte ECDSA (r||s||v), v = 27 or 28[0m
+[96m  ℹ   Verify call:   SolvexVerifier.verify(intent_hash, attestation, tee_sig)[0m
+[96m  ℹ   Reference:     src/verifier_interface.rs → build_verify_calldata()[0m
+
+[92m[1m══════════════════════════════════════════════════════════════════════════════[0m
+[92m[1m  PRISM — TEE Solver Engine — COMPLETE ✅[0m
+[92m[1m══════════════════════════════════════════════════════════════════════════════[0m
+
