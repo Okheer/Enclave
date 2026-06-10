@@ -22,4 +22,6 @@ interface ISolvexVerifier {
         bytes calldata tee_sig,
         address expected_signer
     ) external returns (bool);
+
+     function get_last_attest_hash() external view returns (bytes32);
 }

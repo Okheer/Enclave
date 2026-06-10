@@ -131,7 +131,15 @@ impl SolvexVerifier {
         }
 
         // ── 2. ECDSA Signature Verification ────────────────────────
-        let _signer = self.ecrecover_signer(&attestation_data, &tee_sig)?;
+        let signer = self.ecrecover_signer(&attestation_data, &tee_sig)?;
+        
+        // ── 2b. Signer validation check ────────────────────────────
+        //       Validate that the recovered signer matches the attestation's winner_solver
+        //       (keyless variant — verify_with_expected_signer is the variant that takes
+        //        an explicit expected signer from SolverRegistry).
+        if signer != attestation.winnerSolver {
+            return Err(InvalidAttestation {}.abi_encode());
+        }
 
         // ── 3. Merkle Chain Continuity ─────────────────────────────
         self.verify_chain(attestation.prevAttestHash)?;
@@ -311,8 +319,8 @@ impl SolvexVerifier {
 
     /// **ECDSA Recovery**: Verifies ECDSA signature against the attestation data.
     ///
-    /// For now, this is a placeholder that validates the signature format.
-    /// Full ecrecover precompile integration pending Host context access patterns.
+    /// Uses the ecrecover precompile via the EVM host interface to recover
+    /// the signer address from a keccak256 hash and signature (r, s, v).
     fn ecrecover_signer(
         &self,
         attestation_data: &[u8],
@@ -322,19 +330,32 @@ impl SolvexVerifier {
             return Err(InvalidSignature {}.abi_encode());
         }
 
-        // In a full implementation, this would:
-        // 1. Compute keccak256 of attestation_data
-        // 2. Call ecrecover precompile with hash, v, r, s
-        // 3. Return the recovered address
-        //
-        // For now, we return a placeholder to allow compilation.
-        // The signature format is validated (65 bytes), but full verification
-        // requires Host context access within contract methods.
-        
-        // TODO: Implement ecrecover precompile call when Host context is available
-        Err(EcrecoverFailed {}.abi_encode())
-    }
+        let hash = stylus_sdk::alloy_primitives::keccak256(attestation_data);
 
+        let v = tee_sig[64];
+        let odd_y = v == 28 || v == 1;
+
+        let mut input = [0u8; 128];
+        input[0..32].copy_from_slice(hash.as_slice());
+        input[63] = if odd_y { 1 } else { 0 };
+        input[64..96].copy_from_slice(&tee_sig[0..32]);
+        input[96..128].copy_from_slice(&tee_sig[32..64]);
+
+        // Call ecrecover precompile via the EVM host interface
+        let result = unsafe {
+            RawCall::new(self.vm())
+                .call(ECRECOVER_PRECOMPILE, &input)
+                .map_err(|_| EcrecoverFailed {}.abi_encode())?
+        };
+
+        if result.len() < 32 {
+            return Err(EcrecoverFailed {}.abi_encode());
+        }
+
+        let mut addr = [0u8; 20];
+        addr.copy_from_slice(&result[12..32]);
+        Ok(Address::from(addr))
+    }
     /// Decodes ABI-encoded attestation data into the `Attestation` struct.
     fn decode_attestation(&self, data: &[u8]) -> Result<Attestation, Vec<u8>> {
         <Attestation as SolValue>::abi_decode(data)
