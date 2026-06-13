@@ -48,11 +48,12 @@ contract MockSolvexVerifier is ISolvexVerifier {
         return true;
     }
 
-    function verify_with_expected_signer(
+    function verifyWithExpectedSigner(
         bytes32 intent_hash,
         bytes calldata attestation_data,
         bytes calldata tee_sig,
-        address expected_signer
+        address expected_signer,
+        address expected_winner
     ) external override returns (bool) {
         if (shouldRevert) {
             revert(string(revertReason));
@@ -62,8 +63,20 @@ contract MockSolvexVerifier is ISolvexVerifier {
         return true;
     }
 
-    function get_last_attest_hash() external view override returns (bytes32) {
+    function isIntentSettled(bytes32 intent_hash) external view override returns (bool) {
+        return settled[intent_hash];
+    }
+
+    function getLastAttestHash() external view override returns (bytes32) {
         return lastHash;
+    }
+
+    function getAttestationCount() external view override returns (uint256) {
+        return 0;
+    }
+
+    function getOwner() external view override returns (address) {
+        return address(0);
     }
 
     function setShouldRevert(bool _should, bytes memory _reason) external {
@@ -424,7 +437,7 @@ contract SolvexSettlementTest is Test {
 
         // Verify settlement state
         assertTrue(settlement.isSettled(intentHash), "Intent should be marked settled");
-        assertEq(settlement.getChainHead(), mockVerifier.get_last_attest_hash(), "Chain head mismatch");
+        assertEq(settlement.getChainHead(), mockVerifier.getLastAttestHash(), "Chain head mismatch");
     }
 
     function test_SettleIntent_AlreadySettledReverts() public {

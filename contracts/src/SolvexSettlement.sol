@@ -196,7 +196,7 @@ contract SolvexSettlement is ReentrancyGuard {
         // ──    Merkle chain pre-check (Solidity layer) ────────────────────────
         //       SolvexVerifier also enforces this; duplicating here ensures the
         //       Solidity state machine can never advance without a valid chain.
-        bytes32 chainHead = solvexVerifier.get_last_attest_hash();
+        bytes32 chainHead = solvexVerifier.getLastAttestHash();
 if (_attestation.prev_attest_hash != chainHead)
     revert MerkleChainBroken(chainHead, _attestation.prev_attest_hash);
 
@@ -208,16 +208,17 @@ if (_attestation.prev_attest_hash != chainHead)
         //         c) attestation.prev_attest_hash continuity (Merkle chain)
         //
         //       Attestation must be ABI-encoded for the Stylus verifier contract.
-           bytes memory teePubkey = solverRegistry.getTeePublicKey(_attestation.winner_solver);
-          address expectedSigner = _pubkeyToAddress(teePubkey);
+        bytes memory teePubkey = solverRegistry.getTeePublicKey(_attestation.winner_solver);
+        address expectedSigner = _pubkeyToAddress(teePubkey);
 
-          bool ok = solvexVerifier.verify_with_expected_signer(
-                                                               _intent_hash,
-                                                                abi.encode(_attestation),
-                                                               _tee_sig,
-                                                         expectedSigner
-);
-if (!ok) revert AttestationVerificationFailed(_intent_hash);
+        bool ok = solvexVerifier.verifyWithExpectedSigner(
+            _intent_hash,
+            abi.encode(_attestation),
+            _tee_sig,
+            expectedSigner,
+            _attestation.winner_solver
+        );
+        if (!ok) revert AttestationVerificationFailed(_intent_hash);
 
         // ──    Min-output check against IntentPool escrow record ──────────────
         //       Fetches the EscrowRecord (which must include min_amount_out —
